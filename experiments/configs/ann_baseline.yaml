@@ -2,7 +2,7 @@ include: base.yaml
 
 model:
   type: "ann_autoencoder"
-  n_channels: 64
+  n_channels: 59
   window_size: 256
   latent_dim: 64
   hidden_dims: [128, 64]

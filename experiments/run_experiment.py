@@ -68,6 +68,7 @@ def main():
         test_split=config.data.test_split,
         batch_size=config.data.batch_size,
         num_workers=config.data.num_workers,
+        n_channels=config.model.n_channels,
     )
 
     train_loader = data_loaders["train"]
