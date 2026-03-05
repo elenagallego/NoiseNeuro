@@ -1,0 +1,122 @@
+"""Plotting utilities."""
+
+from pathlib import Path
+from typing import List, Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
+
+def plot_learning_curves(
+    train_loss: List[float],
+    val_loss: List[float],
+    save_path: Optional[Path] = None,
+):
+    """
+    Plot training and validation loss curves.
+
+    Args:
+        train_loss: List of training losses
+        val_loss: List of validation losses
+        save_path: Path to save figure (if None, returns figure)
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_loss, label="Training Loss", linewidth=2)
+    plt.plot(val_loss, label="Validation Loss", linewidth=2)
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (MSE)")
+    plt.title("Learning Curves")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close()
+    else:
+        return plt.gcf()
+
+
+def plot_reconstruction_error_histogram(
+    errors: np.ndarray,
+    labels: Optional[np.ndarray] = None,
+    save_path: Optional[Path] = None,
+):
+    """
+    Plot histogram of reconstruction errors.
+
+    Args:
+        errors: (n_samples,) array of reconstruction errors
+        labels: (n_samples,) array of labels (optional, for separating normal/anomaly)
+        save_path: Path to save figure
+    """
+    plt.figure(figsize=(10, 6))
+
+    if labels is not None:
+        # Separate normal and anomaly
+        normal_errors = errors[labels == 0]
+        anomaly_errors = errors[labels == 1]
+
+        plt.hist(
+            normal_errors,
+            bins=30,
+            alpha=0.6,
+            label=f"Normal (n={len(normal_errors)})",
+            color="blue",
+        )
+        if len(anomaly_errors) > 0:
+            plt.hist(
+                anomaly_errors,
+                bins=30,
+                alpha=0.6,
+                label=f"Anomaly (n={len(anomaly_errors)})",
+                color="red",
+            )
+    else:
+        plt.hist(errors, bins=30, alpha=0.7, color="blue")
+
+    plt.xlabel("Reconstruction Error (MSE)")
+    plt.ylabel("Frequency")
+    plt.title("Distribution of Reconstruction Errors")
+    plt.legend()
+    plt.grid(True, alpha=0.3, axis="y")
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close()
+    else:
+        return plt.gcf()
+
+
+def plot_roc_curve(
+    fpr: np.ndarray,
+    tpr: np.ndarray,
+    auroc: float,
+    save_path: Optional[Path] = None,
+):
+    """
+    Plot ROC curve for anomaly detection.
+
+    Args:
+        fpr: False positive rates
+        tpr: True positive rates
+        auroc: Area under ROC curve
+        save_path: Path to save figure
+    """
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, linewidth=2, label=f"ROC Curve (AUROC={auroc:.3f})")
+    plt.plot([0, 1], [0, 1], "k--", linewidth=1, label="Random Classifier")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close()
+    else:
+        return plt.gcf()
