@@ -126,6 +126,7 @@ def plot_day1_vs_day2_histogram(
     day1_errors: np.ndarray,
     day2_errors: np.ndarray,
     title: str = "Reconstruction Error: Day 1 vs Day 2",
+    bins: int = 40,
     save_path: Optional[Path] = None,
 ):
     """Plot overlapping histograms of Day 1 and Day 2 reconstruction errors.
@@ -134,15 +135,16 @@ def plot_day1_vs_day2_histogram(
         day1_errors: Per-window errors for in-distribution test data.
         day2_errors: Per-window errors for drifted test data.
         title: Plot title.
+        bins: Number of histogram bins.
         save_path: Path to save figure.
     """
     plt.figure(figsize=(10, 6))
     plt.hist(
-        day1_errors, bins=40, alpha=0.6,
+        day1_errors, bins=bins, alpha=0.6,
         label=f"Day 1 (n={len(day1_errors)})", color="steelblue",
     )
     plt.hist(
-        day2_errors, bins=40, alpha=0.6,
+        day2_errors, bins=bins, alpha=0.6,
         label=f"Day 2 (n={len(day2_errors)})", color="coral",
     )
     plt.xlabel("Reconstruction Error (MSE)")

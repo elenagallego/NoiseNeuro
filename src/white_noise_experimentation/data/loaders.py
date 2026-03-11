@@ -23,6 +23,12 @@ from torch.utils.data import DataLoader, Dataset
 # Dataset
 # ---------------------------------------------------------------------------
 
+# Default sampling frequency used for synthetic data generation (Hz).
+_DEFAULT_FS = 256.0
+# Default duration of each synthetic session (seconds).
+_DEFAULT_DURATION_S = 60
+
+
 class EEGWindowDataset(Dataset):
     """Holds windowed EEG-like data with optional labels and session IDs.
 
@@ -97,6 +103,7 @@ def _generate_synthetic_eeg(
 
 def _apply_drift(
     data: np.ndarray,
+    fs: float = _DEFAULT_FS,
     amplitude_scale: float = 1.15,
     drift_frequency: float = 0.5,
     drift_amplitude: float = 0.3,
@@ -111,6 +118,7 @@ def _apply_drift(
 
     Args:
         data: Array of shape ``(n_channels, n_samples)``.
+        fs: Sampling frequency in Hz.
         amplitude_scale: Multiplicative scale factor (>1 = amplified).
         drift_frequency: Frequency of the additive drift wave (Hz).
         drift_amplitude: Amplitude of the additive drift wave.
@@ -121,7 +129,7 @@ def _apply_drift(
     """
     rng = np.random.RandomState(seed)
     n_channels, n_samples = data.shape
-    t = np.arange(n_samples) / 256.0  # assume 256 Hz
+    t = np.arange(n_samples) / fs
 
     shifted = data.copy() * amplitude_scale
     for ch in range(n_channels):
@@ -207,13 +215,12 @@ def load_eeg_dataset_session_split(config) -> Dict[str, DataLoader]:
     window_stride = config.data.window_stride
 
     # --- Generate synthetic EEG for two sessions ---
-    # Session 1 (Day 1): ~60 s of data at 256 Hz
-    n_samples_day1 = 256 * 60
-    day1_raw = _generate_synthetic_eeg(n_channels, n_samples_day1, seed=seed)
+    n_samples_day1 = int(_DEFAULT_FS * _DEFAULT_DURATION_S)
+    day1_raw = _generate_synthetic_eeg(n_channels, n_samples_day1, fs=_DEFAULT_FS, seed=seed)
 
     # Session 2 (Day 2): same length, with controlled drift applied
-    day2_raw = _generate_synthetic_eeg(n_channels, n_samples_day1, seed=seed)
-    day2_raw = _apply_drift(day2_raw, seed=seed + 1)
+    day2_raw = _generate_synthetic_eeg(n_channels, n_samples_day1, fs=_DEFAULT_FS, seed=seed)
+    day2_raw = _apply_drift(day2_raw, fs=_DEFAULT_FS, seed=seed + 1)
 
     # --- Window ---
     day1_windows = _create_windows(day1_raw, window_size, window_stride)
