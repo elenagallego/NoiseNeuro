@@ -20,6 +20,8 @@ class DataConfig:
     val_split: float = 0.1
     test_split: float = 0.1
     seed: int = 42
+    drift_mode: str = "strong"  # "strong" (original) or "subtle" (realistic BCI)
+    drift_strength: float = 0.15  # Controls subtlety of "subtle" drift
 
 
 @dataclass
@@ -43,6 +45,7 @@ class NoiseConfig:
 
     enabled: bool = False
     sigma: float = 0.1
+    where: str = "input"  # "input" or "latent"
 
 
 @dataclass

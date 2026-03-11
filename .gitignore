@@ -35,7 +35,7 @@ env/
 .DS_Store
 
 # Data and results
-data/
+/data/
 runs/
 outputs/
 *.log

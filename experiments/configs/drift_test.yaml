@@ -1,0 +1,18 @@
+# Drift-test configuration.
+#
+# Trains an ANN autoencoder on Day 1 data, then evaluates reconstruction
+# quality on both Day 1 (in-distribution) and Day 2 (drifted) test sets.
+# Produces drift metrics (degradation_pct, q95, AUROC / AUPRC).
+
+include: base.yaml
+
+model:
+  type: "ann_autoencoder"
+  n_channels: 22
+  window_size: 256
+  latent_dim: 64
+  hidden_dims: [128, 64]
+
+noise:
+  enabled: false
+  sigma: 0.0

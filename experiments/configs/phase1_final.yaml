@@ -1,0 +1,40 @@
+# Phase 1.5 Final configuration.
+#
+# Runs all three experiments:
+#   1. Subtle drift (realistic BCI session drift)
+#   2. Corruption robustness test
+#   3. Multi-seed statistical comparison (5 seeds)
+#
+# Usage:
+#   python experiments/run_phase1_final.py
+
+include: base.yaml
+
+data:
+  data_root: "./data/eeg_sample"
+  window_size: 256
+  window_stride: 128
+  normalize: true
+  batch_size: 64
+  num_workers: 0
+  val_split: 0.1
+  test_split: 0.1
+  drift_mode: "subtle"
+  drift_strength: 0.15
+
+model:
+  type: "ann_autoencoder"
+  n_channels: 22
+  window_size: 256
+  latent_dim: 64
+  hidden_dims: [128, 64]
+
+noise:
+  enabled: false
+  sigma: 0.0
+
+train:
+  epochs: 50
+  lr: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 10

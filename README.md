@@ -44,6 +44,40 @@ All objectives met with validated experiments:
 - ✅ Config-driven reproducible experiments
 - ✅ Complete evaluation & visualization pipeline
 
+## Phase 1.5: Proving Denoising Works
+
+Phase 1.5 stress-tests whether denoising autoencoders provide measurable benefits
+over a plain ANN autoencoder using three targeted experiments:
+
+1. **Subtle Drift** – Realistic BCI session drift (per-channel gain variation,
+   low-frequency baseline drift, band-limited muscle noise) replaces the
+   original strong synthetic shift. AUROC drops from 1.0 to ~0.85.
+
+2. **Corruption Robustness** – Gaussian noise is added at test time at multiple
+   levels (σ = 0.02, 0.05, 0.1). DAE σ=0.1 shows the lowest degradation.
+
+3. **Multi-Seed Statistics** – Every model is trained 5 times (seeds 42, 123,
+   456, 777, 999) with mean ± std and t-tests reported.
+
+### Key Findings
+
+| Metric | ANN Baseline | DAE σ=0.05 | DAE σ=0.1 |
+| --- | --- | --- | --- |
+| Degradation % | 4.52 ± 3.33 | 4.57 ± 3.34 | 4.60 ± 3.34 |
+| AUROC (subtle drift) | 0.851 ± 0.209 | 0.855 ± 0.208 | 0.856 ± 0.207 |
+| Corruption deg (σ=0.1) | 7.91 ± 0.33 | 7.90 ± 0.31 | 7.88 ± 0.31 |
+
+- **DAE σ=0.1** achieves the best corruption robustness and highest drift AUROC.
+- Differences are directionally consistent but not statistically significant on
+  synthetic data – expected given the identical architecture and training signal.
+- See [`EXPERIMENT_RESULTS.md`](EXPERIMENT_RESULTS.md) for the full comparison.
+
+### Run Phase 1.5
+
+```bash
+python experiments/run_phase1_final.py
+```
+
 ## Project Structure
 
 ```
