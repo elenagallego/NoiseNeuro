@@ -1,7 +1,7 @@
 """Plotting utilities."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -193,6 +193,159 @@ def plot_drift_bar(
     axes[1].axhline(0, color="black", linewidth=0.8)
     axes[1].grid(True, alpha=0.3, axis="y")
 
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+    else:
+        return fig
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.5 plots
+# ---------------------------------------------------------------------------
+
+
+def plot_subtle_drift_curves(
+    model_results: Dict[str, Dict[str, List[float]]],
+    save_path: Optional[Path] = None,
+):
+    """Bar chart of Day 1 vs Day 2 mean MSE per model with error bars across seeds.
+
+    Args:
+        model_results: ``{model_name: {"day1": [mse_per_seed], "day2": [...]}}``
+        save_path: Path to save figure.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    model_names = list(model_results.keys())
+    x = np.arange(len(model_names))
+    width = 0.35
+
+    day1_means = [np.mean(model_results[m]["day1"]) for m in model_names]
+    day1_stds = [np.std(model_results[m]["day1"]) for m in model_names]
+    day2_means = [np.mean(model_results[m]["day2"]) for m in model_names]
+    day2_stds = [np.std(model_results[m]["day2"]) for m in model_names]
+
+    ax.bar(x - width / 2, day1_means, width, yerr=day1_stds, label="Day 1",
+           color="steelblue", edgecolor="black", linewidth=0.5, capsize=4)
+    ax.bar(x + width / 2, day2_means, width, yerr=day2_stds, label="Day 2",
+           color="coral", edgecolor="black", linewidth=0.5, capsize=4)
+
+    ax.set_ylabel("Mean MSE")
+    ax.set_title("Subtle Drift: Day 1 vs Day 2 Reconstruction Error")
+    ax.set_xticks(x)
+    ax.set_xticklabels(model_names, rotation=15, ha="right")
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+    else:
+        return fig
+
+
+def plot_corruption_robustness(
+    model_corruption: Dict[str, Dict[str, float]],
+    save_path: Optional[Path] = None,
+):
+    """Line plot of corruption degradation % vs sigma for each model.
+
+    Args:
+        model_corruption: ``{model_name: {"0.02": deg%, "0.05": ..., "0.1": ...}}``
+        save_path: Path to save figure.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    markers = ["o", "s", "D", "^", "v"]
+    for i, (name, levels) in enumerate(model_corruption.items()):
+        sigmas = sorted(levels.keys(), key=float)
+        degs = [levels[s] for s in sigmas]
+        ax.plot(
+            [float(s) for s in sigmas], degs,
+            marker=markers[i % len(markers)], linewidth=2, markersize=8, label=name,
+        )
+
+    ax.set_xlabel("Corruption σ")
+    ax.set_ylabel("Degradation %")
+    ax.set_title("Corruption Robustness: MSE Degradation vs Noise Level")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+    else:
+        return fig
+
+
+def plot_corruption_error_histograms(
+    model_errors: Dict[str, Dict[str, np.ndarray]],
+    save_path: Optional[Path] = None,
+):
+    """Histograms: clean vs corrupted reconstruction errors for each model.
+
+    Args:
+        model_errors: ``{model_name: {"clean": errors, "corrupted": errors}}``
+        save_path: Path to save figure.
+    """
+    n_models = len(model_errors)
+    fig, axes = plt.subplots(1, n_models, figsize=(6 * n_models, 5), squeeze=False)
+    axes = axes[0]
+
+    for ax, (name, errs) in zip(axes, model_errors.items()):
+        ax.hist(errs["clean"], bins=30, alpha=0.6, color="steelblue", label="Clean")
+        ax.hist(errs["corrupted"], bins=30, alpha=0.6, color="coral", label="Corrupted")
+        ax.set_title(name)
+        ax.set_xlabel("Reconstruction Error (MSE)")
+        ax.set_ylabel("Frequency")
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis="y")
+
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+    else:
+        return fig
+
+
+def plot_auroc_boxplots(
+    model_aurocs: Dict[str, List[float]],
+    title: str = "AUROC Distribution (5 seeds)",
+    save_path: Optional[Path] = None,
+):
+    """Box-plot of AUROC across seeds for each model.
+
+    Args:
+        model_aurocs: ``{model_name: [auroc_seed1, auroc_seed2, ...]}``
+        title: Plot title.
+        save_path: Path to save figure.
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+    names = list(model_aurocs.keys())
+    data = [model_aurocs[n] for n in names]
+
+    bp = ax.boxplot(data, labels=names, patch_artist=True, widths=0.5)
+    colors = sns.color_palette("Set2", len(names))
+    for patch, color in zip(bp["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_edgecolor("black")
+
+    # Overlay individual points
+    for i, d in enumerate(data, start=1):
+        ax.scatter([i] * len(d), d, color="black", s=30, zorder=3, alpha=0.7)
+
+    ax.set_ylabel("AUROC")
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
 
     if save_path:

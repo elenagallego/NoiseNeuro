@@ -139,6 +139,65 @@ def _apply_drift(
     return shifted.astype(np.float32)
 
 
+def create_subtle_drift(
+    day1_windows: np.ndarray,
+    drift_strength: float = 0.1,
+    fs: float = _DEFAULT_FS,
+    seed: int = 42,
+) -> np.ndarray:
+    """Create realistic BCI drift from Day 1 windows.
+
+    Simulates three realistic sources of session-to-session drift:
+      1. **Amplitude scaling** – small per-channel random gain (±drift_strength)
+         to mimic electrode impedance changes.
+      2. **Low-frequency baseline drift** – boosting sub-1 Hz spectral content
+         to simulate slow electrode/skin potential drift.
+      3. **Band-limited muscle noise** – additive noise in the 20-40 Hz band
+         to simulate increased EMG artifacts.
+
+    Args:
+        day1_windows: Array of shape ``(n_windows, n_channels, window_size)``.
+        drift_strength: Controls the magnitude of all three drift components.
+        fs: Sampling frequency in Hz.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        day2_windows: Drifted copy with the same shape.
+    """
+    rng = np.random.RandomState(seed)
+    n_windows, n_channels, window_size = day1_windows.shape
+    day2 = day1_windows.copy()
+
+    # 1. Amplitude drift (±drift_strength random per channel, constant across windows)
+    amp_scale = 1.0 + drift_strength * rng.randn(1, n_channels, 1)
+    day2 = day2 * amp_scale
+
+    # 2. Low-frequency baseline drift (boost <1 Hz in FFT domain)
+    freqs = np.fft.rfft(day2, axis=-1)
+    n_freq = freqs.shape[-1]
+    freq_bins = np.fft.rfftfreq(window_size, d=1.0 / fs)
+    low_mask = freq_bins < 1.0  # sub-1 Hz
+    gain = np.ones(n_freq, dtype=np.float32)
+    gain[low_mask] = 1.0 + 0.5 * drift_strength
+    # Add per-channel randomness to the low-freq gain
+    gain_noise = rng.randn(1, n_channels, n_freq).astype(np.float32)
+    gain_full = gain[np.newaxis, np.newaxis, :] + 0.05 * drift_strength * gain_noise
+    freqs = freqs * gain_full
+    day2 = np.fft.irfft(freqs, n=window_size, axis=-1).astype(np.float32)
+
+    # 3. Band-limited muscle noise (20-40 Hz)
+    noise = rng.randn(n_windows, n_channels, window_size).astype(np.float32)
+    noise_fft = np.fft.rfft(noise, axis=-1)
+    bandpass = np.zeros(n_freq, dtype=np.float32)
+    band_mask = (freq_bins >= 20.0) & (freq_bins <= 40.0)
+    bandpass[band_mask] = 1.0
+    noise_fft = noise_fft * bandpass[np.newaxis, np.newaxis, :]
+    muscle = np.fft.irfft(noise_fft, n=window_size, axis=-1).astype(np.float32)
+    day2 = day2 + 0.02 * drift_strength * muscle / max(drift_strength, 1e-8)
+
+    return day2
+
+
 # ---------------------------------------------------------------------------
 # Windowing & normalisation
 # ---------------------------------------------------------------------------
@@ -190,17 +249,13 @@ def load_eeg_dataset_session_split(config) -> Dict[str, DataLoader]:
     Session 1 ("Day 1") is used for train / val / test_day1.
     Session 2 ("Day 2") is a distribution-shifted version used for test_day2.
 
+    The type of drift is controlled by ``config.data.drift_mode``:
+      - ``"strong"`` (default): large amplitude scaling + additive sine drift.
+      - ``"subtle"``: realistic BCI drift (per-channel gain, baseline drift,
+        band-limited muscle noise) controlled by ``config.data.drift_strength``.
+
     Args:
-        config: A ``Config`` object (see ``config.py``) with at least:
-            - ``config.data.window_size``
-            - ``config.data.window_stride``
-            - ``config.data.normalize``
-            - ``config.data.batch_size``
-            - ``config.data.num_workers``
-            - ``config.data.val_split``
-            - ``config.data.test_split``
-            - ``config.data.seed``
-            - ``config.model.n_channels``
+        config: A ``Config`` object (see ``config.py``).
 
     Returns:
         Dictionary with keys:
@@ -213,18 +268,29 @@ def load_eeg_dataset_session_split(config) -> Dict[str, DataLoader]:
     n_channels = config.model.n_channels
     window_size = config.data.window_size
     window_stride = config.data.window_stride
+    drift_mode = getattr(config.data, "drift_mode", "strong")
+    drift_strength = getattr(config.data, "drift_strength", 0.1)
 
     # --- Generate synthetic EEG for two sessions ---
     n_samples_day1 = int(_DEFAULT_FS * _DEFAULT_DURATION_S)
     day1_raw = _generate_synthetic_eeg(n_channels, n_samples_day1, fs=_DEFAULT_FS, seed=seed)
 
-    # Session 2 (Day 2): same length, with controlled drift applied
-    day2_raw = _generate_synthetic_eeg(n_channels, n_samples_day1, fs=_DEFAULT_FS, seed=seed)
-    day2_raw = _apply_drift(day2_raw, fs=_DEFAULT_FS, seed=seed + 1)
-
-    # --- Window ---
+    # --- Window Day 1 ---
     day1_windows = _create_windows(day1_raw, window_size, window_stride)
-    day2_windows = _create_windows(day2_raw, window_size, window_stride)
+
+    # --- Create Day 2 (drifted) ---
+    if drift_mode == "subtle":
+        # Subtle drift operates on already-windowed data
+        day2_windows = create_subtle_drift(
+            day1_windows, drift_strength=drift_strength, fs=_DEFAULT_FS, seed=seed + 1
+        )
+    else:
+        # Original strong drift: generate + apply global shift
+        day2_raw = _generate_synthetic_eeg(
+            n_channels, n_samples_day1, fs=_DEFAULT_FS, seed=seed
+        )
+        day2_raw = _apply_drift(day2_raw, fs=_DEFAULT_FS, seed=seed + 1)
+        day2_windows = _create_windows(day2_raw, window_size, window_stride)
 
     # --- Normalise (per-channel z-scoring) ---
     if config.data.normalize:

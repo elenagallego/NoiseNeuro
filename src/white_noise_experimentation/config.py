@@ -20,6 +20,8 @@ class DataConfig:
     val_split: float = 0.1
     test_split: float = 0.1
     seed: int = 42
+    drift_mode: str = "strong"  # "strong" (original) or "subtle" (realistic BCI)
+    drift_strength: float = 0.1  # Controls subtlety of "subtle" drift
 
 
 @dataclass
