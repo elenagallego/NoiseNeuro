@@ -5,16 +5,20 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from white_noise_experimentation.config import load_config
-from white_noise_experimentation.data.loaders import load_eeg_dataset
+from white_noise_experimentation.data.loaders import load_eeg_dataset_session_split
 from white_noise_experimentation.evaluation.metrics import (
     compute_anomaly_metrics,
+    compute_drift_metrics,
     compute_reconstruction_errors,
     evaluate_model,
 )
 from white_noise_experimentation.evaluation.plots import (
+    plot_day1_vs_day2_histogram,
+    plot_drift_bar,
     plot_learning_curves,
     plot_reconstruction_error_histogram,
 )
@@ -57,30 +61,27 @@ def main():
     device = torch.device(config.train.device if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    # Load data
-    logger.info("Loading EEG dataset...")
-    data_loaders = load_eeg_dataset(
-        data_root=config.data.data_root,
-        window_size=config.data.window_size,
-        window_stride=config.data.window_stride,
-        normalize=config.data.normalize,
-        val_split=config.data.val_split,
-        test_split=config.data.test_split,
-        batch_size=config.data.batch_size,
-        num_workers=config.data.num_workers,
-        n_channels=config.model.n_channels,
-    )
+    # ------------------------------------------------------------------
+    # Load data with session-aware Day 1 / Day 2 split
+    # ------------------------------------------------------------------
+    logger.info("Loading EEG dataset with session-aware splits...")
+    data_loaders = load_eeg_dataset_session_split(config)
 
     train_loader = data_loaders["train"]
     val_loader = data_loaders["val"]
-    test_loader = data_loaders["test"]
+    test_day1_loader = data_loaders["test_day1"]
+    test_day2_loader = data_loaders["test_day2"]
 
     logger.info(
         f"Data loaded: {len(train_loader.dataset)} train, "
-        f"{len(val_loader.dataset)} val, {len(test_loader.dataset)} test samples"
+        f"{len(val_loader.dataset)} val, "
+        f"{len(test_day1_loader.dataset)} test_day1, "
+        f"{len(test_day2_loader.dataset)} test_day2 samples"
     )
 
+    # ------------------------------------------------------------------
     # Create model
+    # ------------------------------------------------------------------
     logger.info(f"Creating model: {config.model.type}")
     if config.model.type == "ann_autoencoder":
         model = ANNAutoencoder(
@@ -96,13 +97,16 @@ def main():
             latent_dim=config.model.latent_dim,
             hidden_dims=config.model.hidden_dims,
             sigma=config.noise.sigma,
+            noise_where=config.noise.where,
         )
     else:
         raise ValueError(f"Unknown model type: {config.model.type}")
 
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
 
-    # Train model
+    # ------------------------------------------------------------------
+    # Train
+    # ------------------------------------------------------------------
     logger.info("Starting training...")
     train_results = train_autoencoder(
         model=model,
@@ -119,27 +123,45 @@ def main():
 
     logger.info(f"Training complete. Best val loss: {min(val_loss):.6f}")
 
-    # Evaluate on test set
-    logger.info("Evaluating on test set...")
-    test_metrics = evaluate_model(model, test_loader, device)
-    logger.info(f"Test loss: {test_metrics['test_loss']:.6f}")
+    # ------------------------------------------------------------------
+    # Evaluate on Day 1 (in-distribution) test set
+    # ------------------------------------------------------------------
+    logger.info("Evaluating on Day 1 test set (in-distribution)...")
+    test_day1_metrics = evaluate_model(model, test_day1_loader, device)
+    logger.info(f"Day 1 test loss: {test_day1_metrics['test_loss']:.6f}")
 
-    # Compute reconstruction errors
-    logger.info("Computing reconstruction errors...")
-    errors, labels = compute_reconstruction_errors(model, test_loader, device)
+    # ------------------------------------------------------------------
+    # Drift metrics: Day 1 vs Day 2
+    # ------------------------------------------------------------------
+    logger.info("Computing drift metrics (Day 1 vs Day 2)...")
+    drift_metrics = compute_drift_metrics(model, test_day1_loader, test_day2_loader, device)
+    logger.info(
+        f"Drift: Day1 MSE={drift_metrics['mse_day1_mean']:.6f}, "
+        f"Day2 MSE={drift_metrics['mse_day2_mean']:.6f}, "
+        f"Degradation={drift_metrics['degradation_pct']:.1f}%"
+    )
 
-    # Compute anomaly metrics (if labels available and binary)
-    anomaly_metrics = {}
-    if labels is not None and len(np.unique(labels)) == 2:
-        anomaly_metrics = compute_anomaly_metrics(errors, labels)
-        logger.info(f"Anomaly metrics - AUROC: {anomaly_metrics['auroc']:.3f}, AUPRC: {anomaly_metrics['auprc']:.3f}")
+    # ------------------------------------------------------------------
+    # Anomaly detection: Day 1 (normal=0) vs Day 2 (drift=1)
+    # ------------------------------------------------------------------
+    logger.info("Computing anomaly metrics (Day 1 normal vs Day 2 drift)...")
+    day1_errors, _ = compute_reconstruction_errors(model, test_day1_loader, device)
+    day2_errors, _ = compute_reconstruction_errors(model, test_day2_loader, device)
+    anomaly_metrics = compute_anomaly_metrics(day1_errors, day2_errors)
+    logger.info(
+        f"Anomaly metrics – AUROC: {anomaly_metrics['auroc']:.3f}, "
+        f"AUPRC: {anomaly_metrics['auprc']:.3f}"
+    )
 
+    # ------------------------------------------------------------------
     # Save results
+    # ------------------------------------------------------------------
     results = {
         "config": config_dict,
         "train_loss": train_loss,
         "val_loss": val_loss,
-        "test_metrics": test_metrics,
+        "test_day1_metrics": test_day1_metrics,
+        "drift_metrics": drift_metrics,
         "anomaly_metrics": anomaly_metrics,
     }
 
@@ -148,11 +170,12 @@ def main():
         json.dump(results, f, indent=2)
     logger.info(f"Results saved to {results_file}")
 
-    # Save metrics
-    all_metrics = {**test_metrics, **anomaly_metrics}
+    all_metrics = {**test_day1_metrics, **drift_metrics, **anomaly_metrics}
     logger.save_metrics(all_metrics)
 
-    # Plot learning curves
+    # ------------------------------------------------------------------
+    # Plots
+    # ------------------------------------------------------------------
     logger.info("Generating plots...")
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(exist_ok=True)
@@ -160,8 +183,28 @@ def main():
     plot_learning_curves(train_loss, val_loss, plot_dir / "learning_curves.png")
     logger.info(f"Learning curves saved to {plot_dir / 'learning_curves.png'}")
 
+    plot_day1_vs_day2_histogram(
+        day1_errors, day2_errors,
+        title=f"Reconstruction Error – {config.model.type}",
+        save_path=plot_dir / "day1_vs_day2_errors.png",
+    )
+    logger.info(f"Day1 vs Day2 histogram saved to {plot_dir / 'day1_vs_day2_errors.png'}")
+
+    plot_drift_bar(
+        drift_metrics,
+        model_name=config.model.type,
+        save_path=plot_dir / "drift_bar.png",
+    )
+    logger.info(f"Drift bar chart saved to {plot_dir / 'drift_bar.png'}")
+
+    # Reconstruction error histogram (combined with labels)
+    all_errors = np.concatenate([day1_errors, day2_errors])
+    all_labels = np.concatenate([
+        np.zeros(len(day1_errors), dtype=int),
+        np.ones(len(day2_errors), dtype=int),
+    ])
     plot_reconstruction_error_histogram(
-        errors, labels, plot_dir / "reconstruction_errors.png"
+        all_errors, all_labels, plot_dir / "reconstruction_errors.png"
     )
     logger.info(f"Error histogram saved to {plot_dir / 'reconstruction_errors.png'}")
 
@@ -169,6 +212,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import numpy as np
-
     main()

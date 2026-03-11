@@ -1,11 +1,11 @@
 """Evaluation metrics."""
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import auc, f1_score, precision_recall_curve, roc_auc_score, roc_curve
+from sklearn.metrics import auc, precision_recall_curve, roc_auc_score
 from torch.utils.data import DataLoader
 
 
@@ -56,23 +56,27 @@ def compute_reconstruction_errors(
 
 
 def compute_anomaly_metrics(
-    errors: np.ndarray,
-    labels: np.ndarray,
+    day1_errors: np.ndarray,
+    day2_errors: np.ndarray,
 ) -> Dict[str, float]:
     """
-    Compute anomaly detection metrics.
+    Compute anomaly detection metrics treating Day 1 as normal and Day 2 as drift.
 
-    Assumes labels are binary (0 = normal, 1 = anomaly).
+    Builds binary labels: 0 (Day 1 / normal), 1 (Day 2 / drift) and uses the
+    per-window reconstruction error as the anomaly score.
 
     Args:
-        errors: (n_samples,) array of reconstruction errors
-        labels: (n_samples,) array of binary labels
+        day1_errors: (n_day1,) array of reconstruction errors for in-distribution data.
+        day2_errors: (n_day2,) array of reconstruction errors for drifted data.
 
     Returns:
-        Dict with keys: auroc, auprc, f1_opt, threshold_opt
+        Dict with keys: auroc, auprc
     """
-    if labels is None:
-        return {}
+    errors = np.concatenate([day1_errors, day2_errors])
+    labels = np.concatenate([
+        np.zeros(len(day1_errors), dtype=int),
+        np.ones(len(day2_errors), dtype=int),
+    ])
 
     # AUROC
     auroc = roc_auc_score(labels, errors)
@@ -81,23 +85,48 @@ def compute_anomaly_metrics(
     precision, recall, _ = precision_recall_curve(labels, errors)
     auprc = auc(recall, precision)
 
-    # Optimal F1 threshold
-    fpr, tpr, thresholds = roc_curve(labels, errors)
-    f1_scores = []
-    for threshold in thresholds:
-        predictions = (errors >= threshold).astype(int)
-        f1 = f1_score(labels, predictions)
-        f1_scores.append(f1)
-
-    best_idx = np.argmax(f1_scores)
-    f1_opt = f1_scores[best_idx]
-    threshold_opt = thresholds[best_idx]
-
     return {
         "auroc": float(auroc),
         "auprc": float(auprc),
-        "f1_opt": float(f1_opt),
-        "threshold_opt": float(threshold_opt),
+    }
+
+
+def compute_drift_metrics(
+    model: nn.Module,
+    day1_loader: DataLoader,
+    day2_loader: DataLoader,
+    device: torch.device,
+) -> Dict[str, float]:
+    """Compare reconstruction quality on in-distribution vs drifted data.
+
+    Args:
+        model: Trained autoencoder (will be set to eval mode).
+        day1_loader: In-distribution test set (Session 1 / Day 1).
+        day2_loader: Drifted test set (Session 2 / Day 2).
+        device: Torch device.
+
+    Returns:
+        Dict with keys:
+            - mse_day1_mean
+            - mse_day2_mean
+            - degradation_pct = 100 * ((mse_day2_mean / mse_day1_mean) - 1)
+            - q95_day1  (95th percentile of per-window errors)
+            - q95_day2
+    """
+    day1_errors, _ = compute_reconstruction_errors(model, day1_loader, device, loss_fn="mse")
+    day2_errors, _ = compute_reconstruction_errors(model, day2_loader, device, loss_fn="mse")
+
+    mse_day1_mean = float(np.mean(day1_errors))
+    mse_day2_mean = float(np.mean(day2_errors))
+
+    degradation_pct = 100.0 * ((mse_day2_mean / mse_day1_mean) - 1) if mse_day1_mean > 0 else 0.0
+
+    return {
+        "mse_day1_mean": mse_day1_mean,
+        "mse_day2_mean": mse_day2_mean,
+        "degradation_pct": float(degradation_pct),
+        "q95_day1": float(np.percentile(day1_errors, 95)),
+        "q95_day2": float(np.percentile(day2_errors, 95)),
     }
 
 

@@ -43,6 +43,7 @@ class NoiseConfig:
 
     enabled: bool = False
     sigma: float = 0.1
+    where: str = "input"  # "input" or "latent"
 
 
 @dataclass
