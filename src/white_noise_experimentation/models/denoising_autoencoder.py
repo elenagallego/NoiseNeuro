@@ -21,6 +21,7 @@ class DenoisingAutoencoder(ANNAutoencoder):
         latent_dim: int = 64,
         hidden_dims: list = None,
         sigma: float = 0.1,
+        noise_location: str = "input",
     ):
         """
         Initialize denoising autoencoder.
@@ -31,6 +32,7 @@ class DenoisingAutoencoder(ANNAutoencoder):
             latent_dim: Dimension of latent space
             hidden_dims: List of hidden dimensions for conv filters
             sigma: Standard deviation of Gaussian noise
+            noise_location: Where to inject noise - "input" or "latent"
         """
         super().__init__(
             n_channels=n_channels,
@@ -39,6 +41,7 @@ class DenoisingAutoencoder(ANNAutoencoder):
             hidden_dims=hidden_dims,
         )
         self.sigma = sigma
+        self.noise_location = noise_location  # 'input' or 'latent'
         self.add_noise = True  # Can be toggled at evaluation time
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -51,14 +54,19 @@ class DenoisingAutoencoder(ANNAutoencoder):
         Returns:
             reconstruction: (batch_size, n_channels, window_size)
         """
-        # Add noise during training if enabled
         if self.training and self.add_noise:
-            x_noisy = x + torch.randn_like(x) * self.sigma
+            if self.noise_location == "input":
+                # Add noise to raw input
+                x_noisy = x + torch.randn_like(x) * self.sigma
+                z = self.encode(x_noisy)
+            else:  # latent
+                # Encode clean input, then add noise to latent
+                z = self.encode(x)
+                z = z + torch.randn_like(z) * self.sigma
         else:
-            x_noisy = x
+            z = self.encode(x)
 
-        # Encode and decode
-        z = self.encode(x_noisy)
+        # Decode
         x_recon = self.decode(z)
         return x_recon
 

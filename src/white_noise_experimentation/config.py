@@ -20,6 +20,7 @@ class DataConfig:
     val_split: float = 0.1
     test_split: float = 0.1
     seed: int = 42
+    split_mode: str = "random_split"  # 'random_split' or 'session_split'
 
 
 @dataclass
@@ -43,6 +44,8 @@ class NoiseConfig:
 
     enabled: bool = False
     sigma: float = 0.1
+    location: str = "input"  # 'input' or 'latent'
+
 
 
 @dataclass

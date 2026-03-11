@@ -11,7 +11,10 @@ from white_noise_experimentation.config import load_config
 from white_noise_experimentation.data.loaders import load_eeg_dataset
 from white_noise_experimentation.evaluation.metrics import (
     compute_anomaly_metrics,
+    compute_comprehensive_metrics,
+    compute_drift_metrics,
     compute_reconstruction_errors,
+    compute_synthetic_corruption_test,
     evaluate_model,
 )
 from white_noise_experimentation.evaluation.plots import (
@@ -33,11 +36,22 @@ def main():
         required=True,
         help="Path to config YAML file",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed (overrides config seed if provided)",
+    )
     args = parser.parse_args()
 
     # Load config
     config = load_config(args.config)
     config_dict = config.to_dict()
+    
+    # Override seed if provided via command line
+    if args.seed is not None:
+        config.train.seed = args.seed
+        config_dict["train"]["seed"] = args.seed
 
     # Create run directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -59,23 +73,48 @@ def main():
 
     # Load data
     logger.info("Loading EEG dataset...")
-    data_loaders = load_eeg_dataset(
-        data_root=config.data.data_root,
-        window_size=config.data.window_size,
-        window_stride=config.data.window_stride,
-        normalize=config.data.normalize,
-        val_split=config.data.val_split,
-        test_split=config.data.test_split,
-        batch_size=config.data.batch_size,
-        num_workers=config.data.num_workers,
-        n_channels=config.model.n_channels,
-    )
+    
+    # Check for session split mode
+    split_mode = getattr(config.data, 'split_mode', 'random_split')
+    
+    if split_mode == 'session_split':
+        from white_noise_experimentation.data.loaders import load_eeg_dataset_session_split
+        data_loaders = load_eeg_dataset_session_split(
+            data_root=config.data.data_root,
+            window_size=config.data.window_size,
+            window_stride=config.data.window_stride,
+            normalize=config.data.normalize,
+            batch_size=config.data.batch_size,
+            num_workers=config.data.num_workers,
+            n_channels=config.model.n_channels,
+        )
+        session_info = data_loaders.pop("session_info")
+    else:
+        from white_noise_experimentation.data.loaders import load_eeg_dataset
+        data_loaders = load_eeg_dataset(
+            data_root=config.data.data_root,
+            window_size=config.data.window_size,
+            window_stride=config.data.window_stride,
+            normalize=config.data.normalize,
+            val_split=config.data.val_split,
+            test_split=config.data.test_split,
+            batch_size=config.data.batch_size,
+            num_workers=config.data.num_workers,
+            n_channels=config.model.n_channels,
+        )
+        session_info = None
 
     train_loader = data_loaders["train"]
     val_loader = data_loaders["val"]
     test_loader = data_loaders["test"]
 
-    logger.info(
+    if session_info:
+        logger.info(f"Session split enabled:")
+        logger.info(f"  Train: {session_info['train_samples']} samples (Session {session_info['train_session']})")
+        logger.info(f"  Val: {session_info['val_samples']} samples (Session {session_info['val_session']})")
+        logger.info(f"  Test: {session_info['test_samples']} samples (Session {session_info['test_session']}) - DRIFT SET")
+    else:
+        logger.info(
         f"Data loaded: {len(train_loader.dataset)} train, "
         f"{len(val_loader.dataset)} val, {len(test_loader.dataset)} test samples"
     )
@@ -96,6 +135,7 @@ def main():
             latent_dim=config.model.latent_dim,
             hidden_dims=config.model.hidden_dims,
             sigma=config.noise.sigma,
+            noise_location=config.noise.location,
         )
     else:
         raise ValueError(f"Unknown model type: {config.model.type}")
@@ -119,10 +159,10 @@ def main():
 
     logger.info(f"Training complete. Best val loss: {min(val_loss):.6f}")
 
-    # Evaluate on test set
-    logger.info("Evaluating on test set...")
-    test_metrics = evaluate_model(model, test_loader, device)
-    logger.info(f"Test loss: {test_metrics['test_loss']:.6f}")
+    # Evaluate on test set with comprehensive metrics
+    logger.info("Computing comprehensive test metrics...")
+    test_metrics = compute_comprehensive_metrics(model, test_loader, device)
+    logger.info(f"Test loss: {test_metrics['test_loss']:.6f}, SNR: {test_metrics['snr_db']:.2f} dB")
 
     # Compute reconstruction errors
     logger.info("Computing reconstruction errors...")
@@ -134,6 +174,35 @@ def main():
         anomaly_metrics = compute_anomaly_metrics(errors, labels)
         logger.info(f"Anomaly metrics - AUROC: {anomaly_metrics['auroc']:.3f}, AUPRC: {anomaly_metrics['auprc']:.3f}")
 
+    # Compute drift metrics if session split was used
+    drift_metrics = {}
+    if session_info:
+        logger.info("Computing drift detection metrics...")
+        # Create separate loaders for each session from val/test
+        # Val set is Session 1 (normal), Test set is Session 2 (drift)
+        drift_metrics = compute_drift_metrics(model, val_loader, test_loader, device)
+        logger.info(
+            f"Drift metrics - S1 MSE: {drift_metrics['session1_mse_mean']:.4f}, "
+            f"S2 MSE: {drift_metrics['session2_mse_mean']:.4f}, "
+            f"Degradation: {drift_metrics['degradation_pct']:.1f}%, "
+            f"AUROC: {drift_metrics['auroc_drift']:.3f}"
+        )
+    
+    # Compute synthetic corruption test (test robustness to external noise)
+    logger.info("Computing synthetic corruption test (σ=0.05)...")
+    corruption_metrics = compute_synthetic_corruption_test(
+        model=model,
+        test_loader=test_loader,
+        device=device,
+        corruption_sigma=0.05,
+    )
+    logger.info(
+        f"Corruption robustness - Clean MSE: {corruption_metrics['clean_mse_mean']:.4f}, "
+        f"Corrupted MSE: {corruption_metrics['corrupted_mse_mean']:.4f}, "
+        f"Degradation: {corruption_metrics['degradation_pct']:.1f}%, "
+        f"Sensitivity: {corruption_metrics['sensitivity']:.3f}"
+    )
+
     # Save results
     results = {
         "config": config_dict,
@@ -141,6 +210,8 @@ def main():
         "val_loss": val_loss,
         "test_metrics": test_metrics,
         "anomaly_metrics": anomaly_metrics,
+        "drift_metrics": drift_metrics,
+        "corruption_metrics": corruption_metrics,
     }
 
     results_file = run_dir / "results.json"
@@ -149,7 +220,7 @@ def main():
     logger.info(f"Results saved to {results_file}")
 
     # Save metrics
-    all_metrics = {**test_metrics, **anomaly_metrics}
+    all_metrics = {**test_metrics, **anomaly_metrics, **drift_metrics, **corruption_metrics}
     logger.save_metrics(all_metrics)
 
     # Plot learning curves

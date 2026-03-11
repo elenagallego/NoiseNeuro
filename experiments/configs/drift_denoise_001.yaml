@@ -1,0 +1,15 @@
+include: base.yaml
+
+data:
+  split_mode: "session_split"
+
+model:
+  type: "denoising_autoencoder"
+  n_channels: 59
+  window_size: 256
+  latent_dim: 64
+  hidden_dims: [128, 64]
+
+noise:
+  enabled: true
+  sigma: 0.01
