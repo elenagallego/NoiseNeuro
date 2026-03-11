@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Phase 2: Replace ANN with Spiking Neural Networks.
+"""Phase 2: Compare ANN with Spiking Neural Networks.
 
 Compares the Phase 1 ANN baseline with three SNN variants across
 multiple seeds and produces a full comparison table:
