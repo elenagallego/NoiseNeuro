@@ -78,6 +78,39 @@ over a plain ANN autoencoder using three targeted experiments:
 python experiments/run_phase1_final.py
 ```
 
+## Phase 2: Spiking Neural Networks
+
+Phase 2 replaces the ANN autoencoder with Spiking Neural Networks (SNNs) using
+Leaky Integrate-and-Fire (LIF) neurons with surrogate gradients for BPTT.
+
+### New Models
+
+1. **FixedNoiseSNN** – SNN autoencoder with fixed σ = 0.1 noise injection
+   (spiking equivalent of the Phase 1 denoising AE).
+2. **NoiseControlledSNN** ⭐ – A neural NoiseController predicts per-layer σ
+   from input statistics, enabling adaptive noise injection.
+3. **LatentNoiseSNN** – Noise injected only into the latent bottleneck.
+
+### Key Findings
+
+| Metric | ANN Baseline | Fixed SNN σ=0.1 | Learned SNN |
+| --- | --- | --- | --- |
+| AUROC (subtle drift) | 1.000 ± 0.000 | 0.631 ± 0.282 | 0.631 ± 0.282 |
+| Degradation % | 12.55 ± 3.72 | 0.40 ± 0.92 | 0.40 ± 0.92 |
+| Corruption deg (σ=0.1) | 8.01 ± 0.36 | 1.08 ± 0.05 | 1.08 ± 0.05 |
+
+- **SNNs show significantly better corruption robustness** (1.08% vs 8.01%
+  degradation, p=0.005).
+- SNN reconstruction quality is lower (MSE ~1.0 vs 0.13) which reduces AUROC –
+  improving SNN reconstruction is the key next step.
+- See [`PHASE2_RESULTS.md`](PHASE2_RESULTS.md) for the full comparison.
+
+### Run Phase 2
+
+```bash
+python experiments/run_phase2.py
+```
+
 ## Project Structure
 
 ```
