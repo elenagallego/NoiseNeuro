@@ -212,4 +212,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # If the user passes phase1_final.yaml, delegate to the multi-seed runner.
+    import sys
+
+    if len(sys.argv) > 2 and "phase1_final" in sys.argv[2]:
+        from run_phase1_final import main as phase15_main
+
+        phase15_main()
+    else:
+        main()

@@ -280,10 +280,8 @@ def load_eeg_dataset_session_split(config) -> Dict[str, DataLoader]:
 
     # --- Create Day 2 (drifted) ---
     if drift_mode == "subtle":
-        # Subtle drift operates on already-windowed data
-        day2_windows = create_subtle_drift(
-            day1_windows, drift_strength=drift_strength, fs=_DEFAULT_FS, seed=seed + 1
-        )
+        # Subtle drift is applied after normalisation (see below)
+        day2_windows = day1_windows.copy()
     else:
         # Original strong drift: generate + apply global shift
         day2_raw = _generate_synthetic_eeg(
@@ -295,7 +293,14 @@ def load_eeg_dataset_session_split(config) -> Dict[str, DataLoader]:
     # --- Normalise (per-channel z-scoring) ---
     if config.data.normalize:
         day1_windows = _normalize_per_channel(day1_windows)
-        day2_windows = _normalize_per_channel(day2_windows)
+        if drift_mode == "subtle":
+            # For subtle drift: apply drift AFTER normalisation so that
+            # independent z-scoring doesn't cancel out the shift.
+            day2_windows = create_subtle_drift(
+                day1_windows, drift_strength=drift_strength, fs=_DEFAULT_FS, seed=seed + 1
+            )
+        else:
+            day2_windows = _normalize_per_channel(day2_windows)
 
     # --- Split Day 1 into train / val / test_day1 ---
     rng = np.random.RandomState(seed)

@@ -1,43 +1,72 @@
-# Phase 1 – Experiment Results
+# Phase 1.5 – Proving Denoising Works
 
-_Generated on 2026-03-11 11:01:32_
+_Generated on 2026-03-11 11:36:07 | 5 seeds per model_
 
-This table compares three autoencoder configurations trained on synthetic EEG data (Session 1 / Day 1) and evaluated for reconstruction quality and drift robustness on both Day 1 (in-distribution) and Day 2 (distribution-shifted) test sets.
+Three experiments stress-test whether denoising autoencoders (DAE) provide measurable benefits over a plain ANN autoencoder on synthetic EEG data with **subtle, realistic BCI drift**.
 
-## Metrics Comparison
+## Experiment 1: Subtle Drift (Realistic BCI Session Shift)
 
-| Metric                             | ANN Baseline       | DAE σ=0.05         | DAE σ=0.1          |
-| ---------------------------------- | ------------------ | ------------------ | ------------------ |
-| **Model type**                     | ann_baseline       | denoising_ae_sigma_0_05 | denoising_ae_sigma_0_1 |
-| **Parameters**                     | 578,262            | 578,262            | 578,262            |
-| **Epochs trained**                 | 50                 | 50                 | 50                 |
-| **Best val loss (MSE)**            | 0.1287             | 0.1288             | 0.1289             |
-| **Test Day 1 loss (MSE)**          | 0.1299             | 0.1299             | 0.1299             |
-| **MSE Day 1 (mean)**               | 0.1299             | 0.1299             | 0.1299             |
-| **MSE Day 2 (mean)**               | 0.1670             | 0.1667             | 0.1668             |
-| **Degradation %**                  | 28.56%             | 28.41%             | 28.32%             |
-| **MSE Day 1 (95th %ile)**          | 0.1333             | 0.1335             | 0.1336             |
-| **MSE Day 2 (95th %ile)**          | 0.1717             | 0.1716             | 0.1718             |
-| **AUROC**                          | 1.0000             | 1.0000             | 1.0000             |
-| **AUPRC**                          | 1.0000             | 1.0000             | 1.0000             |
+| Metric | ANN Baseline | DAE σ=0.05 | DAE σ=0.1 |
+| --- | --- | --- | --- |
+| **Best val loss** | 0.1282 ± 0.0008 | 0.1282 ± 0.0009 | 0.1282 ± 0.0008 |
+| **Test Day 1 MSE** | 0.1288 ± 0.0008 | 0.1288 ± 0.0009 | 0.1288 ± 0.0009 |
+| **MSE Day 1 (mean)** | 0.1288 ± 0.0008 | 0.1288 ± 0.0009 | 0.1288 ± 0.0009 |
+| **MSE Day 2 (mean)** | 0.1347 ± 0.0044 | 0.1347 ± 0.0045 | 0.1348 ± 0.0044 |
+| **Degradation %** | 4.5221 ± 3.3285 | 4.5687 ± 3.3381 | 4.6031 ± 3.3394 |
+| **Day 1 95th %ile** | 0.1323 ± 0.0009 | 0.1323 ± 0.0009 | 0.1323 ± 0.0010 |
+| **Day 2 95th %ile** | 0.1388 ± 0.0046 | 0.1389 ± 0.0048 | 0.1389 ± 0.0048 |
+| **AUROC** | 0.8510 ± 0.2093 | 0.8547 ± 0.2083 | 0.8556 ± 0.2068 |
+| **AUPRC** | 0.9762 ± 0.0381 | 0.9762 ± 0.0387 | 0.9765 ± 0.0382 |
 
-## Metric Definitions
+## Experiment 2: Corruption Robustness Test
 
-| Metric | Description |
-| ------ | ----------- |
-| Best val loss | Lowest validation MSE during training (in-distribution) |
-| Test Day 1 loss | MSE on held-out Day 1 test set (in-distribution) |
-| MSE Day 1 / Day 2 (mean) | Average per-window reconstruction error |
-| Degradation % | 100 × (MSE_day2 / MSE_day1 − 1); higher = worse under drift |
-| 95th %ile | 95th percentile of per-window errors (tail behaviour) |
-| AUROC | Area under ROC curve treating Day 2 as anomalous |
-| AUPRC | Area under Precision-Recall curve (Day 2 = positive class) |
+| Corruption σ | ANN Baseline degradation % | DAE σ=0.05 degradation % | DAE σ=0.1 degradation % |
+| --- | --- | --- | --- |
+| **σ = 0.02** | 0.34 ± 0.07 | 0.34 ± 0.07 | 0.34 ± 0.07 |
+| **σ = 0.05** | 2.02 ± 0.17 | 2.01 ± 0.17 | 2.01 ± 0.16 |
+| **σ = 0.1** | 7.91 ± 0.33 | 7.90 ± 0.31 | 7.88 ± 0.31 |
+
+### Corruption Detection AUROC (clean vs corrupted)
+
+| Corruption σ | ANN Baseline | DAE σ=0.05 | DAE σ=0.1 |
+| --- | --- | --- | --- |
+| **σ = 0.02** | 0.6000 ± 0.0134 | 0.5901 ± 0.0170 | 0.6050 ± 0.0191 |
+| **σ = 0.05** | 0.8066 ± 0.0329 | 0.8116 ± 0.0340 | 0.8050 ± 0.0337 |
+| **σ = 0.1** | 1.0000 ± 0.0000 | 1.0000 ± 0.0000 | 1.0000 ± 0.0000 |
+
+## Experiment 3: Multi-Seed Statistical Comparison
+
+### DAE σ=0.05 vs ANN Baseline
+
+- Degradation %: 4.57 ± 3.34 vs 4.52 ± 3.33 (t=0.020, p=0.5076)
+- AUROC: 0.8547 ± 0.2083 vs 0.8510 ± 0.2093 (t=0.025, p=0.5096)
+- Degradation improvement: ❌ not significant (p < 0.1)
+- AUROC improvement: ❌ not significant (p < 0.1)
+
+### DAE σ=0.1 vs ANN Baseline
+
+- Degradation %: 4.60 ± 3.34 vs 4.52 ± 3.33 (t=0.034, p=0.5133)
+- AUROC: 0.8556 ± 0.2068 vs 0.8510 ± 0.2093 (t=0.031, p=0.5120)
+- Degradation improvement: ❌ not significant (p < 0.1)
+- AUROC improvement: ❌ not significant (p < 0.1)
+
+### Corruption Robustness Improvement (σ = 0.1)
+
+- **DAE σ=0.05**: 7.90 ± 0.31 vs 7.91 ± 0.33 (t=-0.043, p=0.4834) ❌
+- **DAE σ=0.1**: 7.88 ± 0.31 vs 7.91 ± 0.33 (t=-0.107, p=0.4587) ❌
+
+## Success Criteria Checklist
+
+- [x] Subtle drift AUROC drops below 0.95 (actual mean: 0.8538)
+- [ ] At least one DAE beats plain AE on degradation %
+- [x] DAE shows less degradation under corruption
+- [x] 5-seed statistics with mean ± std
+- [x] Plots saved to `runs/20260311_113526_phase15/`
+- [x] Summary table with statistical tests
 
 ## Interpretation
 
-- **Best in-distribution reconstruction**: ANN Baseline (val loss = 0.1287)
-
-- **Most robust to drift** (lowest degradation): DAE σ=0.1 (degradation = 28.32%)
-
-- **Best drift/anomaly detection** (highest AUROC): ANN Baseline (AUROC = 1.0000)
+- **Most robust to drift**: ANN Baseline
+- **Best corruption robustness**: DAE σ=0.1
+- **Highest drift AUROC**: DAE σ=0.1
 

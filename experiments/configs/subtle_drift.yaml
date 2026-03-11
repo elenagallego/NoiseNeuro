@@ -7,7 +7,7 @@ include: base.yaml
 
 data:
   drift_mode: "subtle"
-  drift_strength: 0.1
+  drift_strength: 0.15
 
 model:
   type: "ann_autoencoder"
