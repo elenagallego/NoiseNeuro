@@ -193,7 +193,7 @@ def create_subtle_drift(
     bandpass[band_mask] = 1.0
     noise_fft = noise_fft * bandpass[np.newaxis, np.newaxis, :]
     muscle = np.fft.irfft(noise_fft, n=window_size, axis=-1).astype(np.float32)
-    day2 = day2 + 0.02 * drift_strength * muscle / max(drift_strength, 1e-8)
+    day2 = day2 + 0.02 * drift_strength * muscle
 
     return day2
 

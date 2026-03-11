@@ -1,6 +1,6 @@
 # Phase 1.5 – Proving Denoising Works
 
-_Generated on 2026-03-11 11:36:07 | 5 seeds per model_
+_Generated on 2026-03-11 11:39:25 | 5 seeds per model_
 
 Three experiments stress-test whether denoising autoencoders (DAE) provide measurable benefits over a plain ANN autoencoder on synthetic EEG data with **subtle, realistic BCI drift**.
 
@@ -11,12 +11,12 @@ Three experiments stress-test whether denoising autoencoders (DAE) provide measu
 | **Best val loss** | 0.1282 ± 0.0008 | 0.1282 ± 0.0009 | 0.1282 ± 0.0008 |
 | **Test Day 1 MSE** | 0.1288 ± 0.0008 | 0.1288 ± 0.0009 | 0.1288 ± 0.0009 |
 | **MSE Day 1 (mean)** | 0.1288 ± 0.0008 | 0.1288 ± 0.0009 | 0.1288 ± 0.0009 |
-| **MSE Day 2 (mean)** | 0.1347 ± 0.0044 | 0.1347 ± 0.0045 | 0.1348 ± 0.0044 |
-| **Degradation %** | 4.5221 ± 3.3285 | 4.5687 ± 3.3381 | 4.6031 ± 3.3394 |
+| **MSE Day 2 (mean)** | 0.1346 ± 0.0044 | 0.1347 ± 0.0045 | 0.1347 ± 0.0044 |
+| **Degradation %** | 4.4745 ± 3.3308 | 4.5212 ± 3.3403 | 4.5558 ± 3.3415 |
 | **Day 1 95th %ile** | 0.1323 ± 0.0009 | 0.1323 ± 0.0009 | 0.1323 ± 0.0010 |
-| **Day 2 95th %ile** | 0.1388 ± 0.0046 | 0.1389 ± 0.0048 | 0.1389 ± 0.0048 |
-| **AUROC** | 0.8510 ± 0.2093 | 0.8547 ± 0.2083 | 0.8556 ± 0.2068 |
-| **AUPRC** | 0.9762 ± 0.0381 | 0.9762 ± 0.0387 | 0.9765 ± 0.0382 |
+| **Day 2 95th %ile** | 0.1388 ± 0.0046 | 0.1388 ± 0.0047 | 0.1388 ± 0.0048 |
+| **AUROC** | 0.8484 ± 0.2102 | 0.8521 ± 0.2098 | 0.8532 ± 0.2098 |
+| **AUPRC** | 0.9757 ± 0.0385 | 0.9757 ± 0.0393 | 0.9755 ± 0.0400 |
 
 ## Experiment 2: Corruption Robustness Test
 
@@ -38,15 +38,15 @@ Three experiments stress-test whether denoising autoencoders (DAE) provide measu
 
 ### DAE σ=0.05 vs ANN Baseline
 
-- Degradation %: 4.57 ± 3.34 vs 4.52 ± 3.33 (t=0.020, p=0.5076)
-- AUROC: 0.8547 ± 0.2083 vs 0.8510 ± 0.2093 (t=0.025, p=0.5096)
+- Degradation %: 4.52 ± 3.34 vs 4.47 ± 3.33 (t=0.020, p=0.5077)
+- AUROC: 0.8521 ± 0.2098 vs 0.8484 ± 0.2102 (t=0.025, p=0.4905)
 - Degradation improvement: ❌ not significant (p < 0.1)
 - AUROC improvement: ❌ not significant (p < 0.1)
 
 ### DAE σ=0.1 vs ANN Baseline
 
-- Degradation %: 4.60 ± 3.34 vs 4.52 ± 3.33 (t=0.034, p=0.5133)
-- AUROC: 0.8556 ± 0.2068 vs 0.8510 ± 0.2093 (t=0.031, p=0.5120)
+- Degradation %: 4.56 ± 3.34 vs 4.47 ± 3.33 (t=0.034, p=0.5133)
+- AUROC: 0.8532 ± 0.2098 vs 0.8484 ± 0.2102 (t=0.032, p=0.4877)
 - Degradation improvement: ❌ not significant (p < 0.1)
 - AUROC improvement: ❌ not significant (p < 0.1)
 
@@ -57,11 +57,11 @@ Three experiments stress-test whether denoising autoencoders (DAE) provide measu
 
 ## Success Criteria Checklist
 
-- [x] Subtle drift AUROC drops below 0.95 (actual mean: 0.8538)
+- [x] Subtle drift AUROC drops below 0.95 (actual mean: 0.8512)
 - [ ] At least one DAE beats plain AE on degradation %
 - [x] DAE shows less degradation under corruption
 - [x] 5-seed statistics with mean ± std
-- [x] Plots saved to `runs/20260311_113526_phase15/`
+- [x] Plots saved to `runs/20260311_113844_phase15/`
 - [x] Summary table with statistical tests
 
 ## Interpretation

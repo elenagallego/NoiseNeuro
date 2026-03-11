@@ -262,7 +262,8 @@ def generate_phase15_markdown(all_seed_results, run_root):
 
         # One-sided t-test: DAE degradation < baseline degradation
         t_deg, p_deg = stats.ttest_ind(m_degs, baseline_degs, alternative="less")
-        t_aur, p_aur = stats.ttest_ind(m_aurocs, baseline_aurocs, alternative="less")
+        # One-sided t-test: DAE AUROC > baseline AUROC (higher is better)
+        t_aur, p_aur = stats.ttest_ind(m_aurocs, baseline_aurocs, alternative="greater")
 
         lines.append(f"### {m} vs {baseline_name}\n")
         lines.append(f"- Degradation %: {_mean_std(m_degs, 2)} vs {_mean_std(baseline_degs, 2)} "
