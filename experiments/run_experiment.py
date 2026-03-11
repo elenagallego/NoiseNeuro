@@ -24,6 +24,8 @@ from white_noise_experimentation.evaluation.plots import (
 )
 from white_noise_experimentation.models.ann_autoencoder import ANNAutoencoder
 from white_noise_experimentation.models.denoising_autoencoder import DenoisingAutoencoder
+from white_noise_experimentation.models.snn_autoencoder import FixedNoiseSNN, LatentNoiseSNN
+from white_noise_experimentation.models.noise_controller_snn import NoiseControlledSNN
 from white_noise_experimentation.training.trainer import train_autoencoder
 from white_noise_experimentation.utils.logging import TimestampedLogger, set_seed
 
@@ -98,6 +100,30 @@ def main():
             hidden_dims=config.model.hidden_dims,
             sigma=config.noise.sigma,
             noise_where=config.noise.where,
+        )
+    elif config.model.type == "fixed_noise_snn":
+        model = FixedNoiseSNN(
+            n_channels=config.model.n_channels,
+            window_size=config.model.window_size,
+            latent_dim=config.model.latent_dim,
+            hidden_dims=config.model.hidden_dims,
+            noise_sigma=config.noise.sigma,
+        )
+    elif config.model.type == "latent_noise_snn":
+        model = LatentNoiseSNN(
+            n_channels=config.model.n_channels,
+            window_size=config.model.window_size,
+            latent_dim=config.model.latent_dim,
+            hidden_dims=config.model.hidden_dims,
+            noise_sigma=config.noise.sigma,
+        )
+    elif config.model.type == "noise_controller_snn":
+        model = NoiseControlledSNN(
+            n_channels=config.model.n_channels,
+            window_size=config.model.window_size,
+            latent_dim=config.model.latent_dim,
+            hidden_dims=config.model.hidden_dims,
+            noise_sigma=config.noise.sigma,
         )
     else:
         raise ValueError(f"Unknown model type: {config.model.type}")
@@ -213,11 +239,16 @@ def main():
 
 if __name__ == "__main__":
     # If the user passes phase1_final.yaml, delegate to the multi-seed runner.
+    # If the user passes phase2_full.yaml, delegate to the phase 2 runner.
     import sys
 
     if len(sys.argv) > 2 and "phase1_final" in sys.argv[2]:
         from run_phase1_final import main as phase15_main
 
         phase15_main()
+    elif len(sys.argv) > 2 and "phase2" in sys.argv[2]:
+        from run_phase2 import main as phase2_main
+
+        phase2_main()
     else:
         main()

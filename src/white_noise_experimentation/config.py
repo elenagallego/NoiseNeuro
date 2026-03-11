@@ -28,7 +28,7 @@ class DataConfig:
 class ModelConfig:
     """Model architecture configuration."""
 
-    type: str  # 'ann_autoencoder' or 'denoising_autoencoder'
+    type: str  # 'ann_autoencoder', 'denoising_autoencoder', 'fixed_noise_snn', 'latent_noise_snn', 'noise_controller_snn'
     n_channels: int = 64  # EEG channels
     window_size: int = 256
     latent_dim: int = 64

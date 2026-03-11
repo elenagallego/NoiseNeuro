@@ -49,6 +49,9 @@ def train_autoencoder(
     # Loss function
     criterion = nn.MSELoss()
 
+    # Check if this model has sigma regularisation (NoiseControlledSNN)
+    has_sigma_reg = hasattr(model, "sigma_regularisation")
+
     # Callbacks
     run_dir = Path(run_dir)
     early_stopping = EarlyStoppingCallback(
@@ -73,6 +76,9 @@ def train_autoencoder(
             optimizer.zero_grad()
             x_recon = model(x)
             loss = criterion(x_recon, x)
+            # Add sigma regularisation for NoiseControlledSNN
+            if has_sigma_reg:
+                loss = loss + model.sigma_regularisation()
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
